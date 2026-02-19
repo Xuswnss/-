@@ -1,0 +1,10 @@
+build
+.gradle
+!gradle/wrapper/*
+*.iml
+.idea
+out
+*.log
+.git
+.gitignore
+README.md

@@ -1,0 +1,220 @@
+openapi: 3.0.3
+info:
+  title: Core API (Blockchain Server)
+  description: |
+    **서버 1 — 블록체인 전용.** 연구 Backend(Java)가 호출하는 API입니다.
+    - 연구 **참여 신청** 시 → 에스크로 생성 (XRPL)
+    - 연구 **참여 철회** 시 → 에스크로 취소
+    - 대시보드 **에스크로 총액** 등 KPI 조회
+
+    테스트넷: XRPL Testnet (API 키 불필요, Faucet으로 테스트 XRP 발급).
+  version: 1.0.0
+  contact:
+    name: UniQdata Core
+
+servers:
+  - url: http://localhost:3000/api
+    description: 로컬 개발
+  - url: http://core:3000/api
+    description: Docker 내부 (Backend → Core 호출 시)
+
+tags:
+  - name: Escrow
+    description: 연구 참여/철회 시 XRPL 에스크로 생성·취소
+  - name: Summary
+    description: 에스크로 지갑 잔액 등 대시보드 KPI
+
+paths:
+  /escrow:
+    post:
+      tags:
+        - Escrow
+      summary: 에스크로 생성 (연구 참여 신청)
+      description: |
+        참여자가 연구에 신청할 때 **Backend**가 이 API를 호출합니다.
+        XRPL에 EscrowCreate 트랜잭션을 보내 참여자 주소로 지급될 XRP를 예치합니다.
+        **응답의 ownerAddress, offerSequence는 Backend DB에 저장**해 두었다가 참여 철회 시 `/escrow/cancel`에 전달해야 합니다.
+      operationId: createEscrow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEscrowRequest'
+            example:
+              projectId: "1"
+              participantAddress: "rN7n7otQDd6FczFgLdlqtyMVrn3e1DjxvV"
+              amountXrp: 10
+      responses:
+        '201':
+          description: 에스크로 생성 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateEscrowResponse'
+              example:
+                txHash: "A1B2C3D4..."
+                escrowId: "A1B2C3D4..."
+                ownerAddress: "rHb9CJAWyB4rj91VRWn96DkukG4b8tyKjV"
+                offerSequence: 12345
+        '400':
+          description: 잘못된 요청 (예: projectId 범위 초과)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: XRPL 연결/서명 실패 (WSS URL, ESCROW_WALLET_SECRET 확인)
+
+  /escrow/cancel:
+    post:
+      tags:
+        - Escrow
+      summary: 에스크로 취소 (연구 참여 철회)
+      description: |
+        참여자가 연구를 철회할 때 **Backend**가 이 API를 호출합니다.
+        Body에는 **createEscrow 시 반환된 ownerAddress, offerSequence**를 그대로 전달합니다 (Backend DB에 저장해 둔 값).
+      operationId: cancelEscrow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelEscrowRequest'
+            example:
+              ownerAddress: "rHb9CJAWyB4rj91VRWn96DkukG4b8tyKjV"
+              offerSequence: 12345
+      responses:
+        '201':
+          description: 에스크로 취소 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelEscrowResponse'
+              example:
+                txHash: "E5F6G7H8..."
+        '400':
+          description: 권한 없음 (다른 지갑의 에스크로는 취소 불가)
+        '500':
+          description: XRPL 제출 실패
+
+  /summary:
+    get:
+      tags:
+        - Summary
+      summary: 에스크로 KPI (대시보드용)
+      description: |
+        에스크로 전용 지갑 잔액 등. Wireframe의 "에스크로 총액"에 해당합니다.
+        total_participants, total_datapoints는 연구 Backend DB에서 집계한 뒤 프론트에서 합쳐서 표시하면 됩니다.
+      operationId: getSummary
+      responses:
+        '200':
+          description: KPI 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SummaryResponse'
+              example:
+                escrow_wallet_address: "rHb9CJAWyB4rj91VRWn96DkukG4b8tyKjV"
+                escrow_balance_drops: "1000000000"
+                escrow_balance_xrp: 1000
+                network: "testnet"
+        '500':
+          description: XRPL 연결 실패
+
+components:
+  schemas:
+    CreateEscrowRequest:
+      type: object
+      required:
+        - projectId
+        - participantAddress
+        - amountXrp
+      properties:
+        projectId:
+          type: string
+          description: 연구(프로젝트) ID. XRPL DestinationTag로 사용되며 uint32 범위 권장.
+          example: "1"
+        participantAddress:
+          type: string
+          description: 참여자의 XRPL 지갑 주소 (에스크로 수령자). 연구 완료 시 이 주소로 XRP 지급.
+          example: "rN7n7otQDd6FczFgLdlqtyMVrn3e1DjxvV"
+        amountXrp:
+          type: number
+          minimum: 0.000001
+          description: 예치할 XRP 수량 (테스트넷에서는 Faucet으로 받은 테스트 XRP 사용).
+          example: 10
+        finishAfterLedgerTime:
+          type: integer
+          description: 에스크로 만료 시점 (Ripple epoch 초). 생략 시 생성일 기준 30일 후.
+          example: 4102444800
+
+    CreateEscrowResponse:
+      type: object
+      required:
+        - txHash
+        - escrowId
+        - ownerAddress
+        - offerSequence
+      properties:
+        txHash:
+          type: string
+          description: XRPL 트랜잭션 해시 (Explorer에서 조회 가능)
+        escrowId:
+          type: string
+          description: 에스크로 식별자 (현재는 txHash와 동일)
+        ownerAddress:
+          type: string
+          description: 에스크로 소유 주소. 취소 시 cancelEscrow의 ownerAddress로 전달
+        offerSequence:
+          type: integer
+          format: int64
+          description: 에스크로 생성 시퀀스. 취소 시 cancelEscrow의 offerSequence로 전달
+
+    CancelEscrowRequest:
+      type: object
+      required:
+        - ownerAddress
+        - offerSequence
+      properties:
+        ownerAddress:
+          type: string
+          description: 에스크로를 생성한 지갑 주소 (Core 에스크로 지갑). createEscrow 응답의 ownerAddress
+        offerSequence:
+          type: integer
+          format: int64
+          description: 에스크로 생성 트랜잭션의 Sequence. createEscrow 응답의 offerSequence
+
+    CancelEscrowResponse:
+      type: object
+      required:
+        - txHash
+      properties:
+        txHash:
+          type: string
+          description: EscrowCancel 트랜잭션 해시
+
+    SummaryResponse:
+      type: object
+      properties:
+        escrow_wallet_address:
+          type: string
+          description: Core 에스크로 전용 지갑 주소
+        escrow_balance_drops:
+          type: string
+          description: 잔액 (drops). 1 XRP = 1,000,000 drops
+        escrow_balance_xrp:
+          type: number
+          description: 잔액 (XRP 단위)
+        network:
+          type: string
+          description: 연결된 네트워크 (testnet / devnet / mainnet)
+          enum: [testnet, devnet, mainnet]
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: string

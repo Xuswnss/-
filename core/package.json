@@ -1,0 +1,26 @@
+{
+  "name": "core",
+  "version": "0.1.0",
+  "description": "XRPL Blockchain Server - 연구 참여/철회 시 에스크로 등 처리",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "@nestjs/platform-express": "^10.0.0",
+    "@nestjs/swagger": "^7.4.0",
+    "reflect-metadata": "^0.2.0",
+    "ripple-address-codec": "^4.3.1",
+    "rxjs": "^7.8.0",
+    "xrpl": "^3.0.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.0.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

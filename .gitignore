@@ -1,0 +1,49 @@
+# --- 환경/시크릿 ---
+.env
+.env.local
+.env.*.local
+.env.example
+*.pem
+*.key
+
+# --- Core (Node/NestJS) ---
+core/node_modules/
+core/dist/
+core/npm-debug.log*
+core/.npm
+core/.nest
+
+# --- Backend (Java/Gradle) ---
+backend/build/
+backend/.gradle/
+backend/out/
+backend/*.iml
+backend/*.class
+backend/.idea/
+backend/*.log
+backend/.settings/
+backend/.classpath
+backend/.project
+
+# --- IDE / OS ---
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- 로그 / 캐시 ---
+*.log
+logs/
+.cache/
+
+# --- Docker (선택) ---
+# docker-compose.override.yml
+
+# --- 기타 ---
+*.bak
+*.tmp
+*.temp
+*.md
